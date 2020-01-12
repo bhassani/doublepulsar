@@ -115,6 +115,13 @@ typedef BOOLEAN (NTAPI *KiSystemCall64_t)(
   KTRAP_FRAME * Frame
 );
 
+//
+// srv!SrvTransactionNotImplemented
+//
+typedef NTSTATUS (NTAPI * SrvTransactionNotImplemented_t)(
+  PVOID WorkContext
+);
+
 struct Functions {
   ZwQuerySystemInformation_t ZwQuerySystemInformation;
   ExAllocatePool_t           ExAllocatePool;
