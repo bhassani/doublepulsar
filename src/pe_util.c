@@ -28,45 +28,9 @@
 #include "payload_util.h"
 #include "hs_util.h"
 #include "pe_util.h"
-
-#if defined(_UM_UTILS)
-PVOID GetPeBase(DWORD ModHsh)
-{
-#if defined(_M_X64) || defined(_WIN64)
-  PPEB PebPtr = (PPEB)__readgsqword(OFFSET_TO_PEB_WIN64);
-#else
-  PPEB PebPtr = (PPEB)__readfsdword(OFFSET_TO_PEB_WIN32);
-#endif
-  PPEB_LDR_DATA_CUSTOM             PebLdr = 0;
-  PLDR_DATA_TABLE_ENTRY_CUSTOM     LdrEnt = 0;
-  PLIST_ENTRY                      LstHdr = 0;
-  PLIST_ENTRY                      LstEnt = 0;
-  DWORD                            StrHsh = 0;
-
-  PebLdr = (PPEB_LDR_DATA_CUSTOM)PebPtr->Ldr;
-  LstHdr = &PebLdr->InLoadOrderModuleList;
-  LstEnt = LstHdr->Flink;
-
-  for ( ; LstHdr != LstEnt ; LstEnt = LstEnt->Flink )
-  {
-   /*
-    * We hash the string using the modified Djb2
-    * hashing algorithm (supports unicode / ascii)
-    *
-    * Afterwards, we compare the result with the 
-    * requested hash.
-    */
-    LdrEnt = (PLDR_DATA_TABLE_ENTRY_CUSTOM)LstEnt;
-    StrHsh = HashStringDjb2(LdrEnt->BaseDllName.Buffer, LdrEnt->BaseDllName.Length);
-    if ( StrHsh == ModHsh ) {
-      return LdrEnt->DllBase;
-    };
-  };
-  return NULL;
-};
-#elif defined(_KM_UTILS)
 #include "hashes.h"
 #include "winapi.h"
+
 PVOID GetPeBase(DWORD DrvHsh)
 {
 #if defined(_M_X64) || defined(_WIN64)
@@ -161,9 +125,6 @@ PVOID GetPeBase(DWORD DrvHsh)
 
   return (void *)ModuleBase;
 };
-#else
-#error Please supply either _KM_UTILS or _UM_UTILS.
-#endif
 
 PVOID GetPeFunc(PVOID ModPtr, DWORD FunHsh)
 {

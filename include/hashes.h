@@ -30,9 +30,10 @@
 #define HASH_EXALLOCATEPOOL           0xa5315eae
 #define HASH_EXFREEPOOL               0xa8773b2b
 
-#define HASH_SRVSMBV1                 0x4c76fe1d
-#define HASH_NTOSKRNL                 0x7bda239a
+#define HASH_SRVSMBV1                 0x7bda239a
+#define HASH_NTOSKRNL                 0x4c76fe1d
 
 #define HASH_DATA 		      0xd4903fda
+#define HASH_PAGE                     0x6b5cc94f
 
 #endif
